@@ -9,6 +9,8 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: db
+    command: postgres -c 'max_connections=9000'
+
   app:
     build:
       dockerfile: Dockerfile

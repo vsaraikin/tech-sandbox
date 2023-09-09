@@ -8,7 +8,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"time"
+	"sync"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 )
 
 func main() {
-	numberRows := 10000
+	numberRows := 8000
 
 	// Establish a connection to the PostgreSQL database
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
@@ -45,7 +45,7 @@ func main() {
 	}
 
 	// Seed the random number generator
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(824)
 
 	// Load CSV data for realistic names and cities
 	lastNames, err := loadCSV("last_names.csv")
@@ -63,25 +63,36 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Generate and insert random data into the "balances" table with permuted names and cities
+	var wg sync.WaitGroup
+
+	// Use goroutines to insert random data into the "balances" table with permuted names and cities
 	for i := 1; i <= numberRows; i++ {
-		permutedLastNames := permuteSlice(lastNames)
-		permutedFirstNames := permuteSlice(firstNames)
-		permutedCities := permuteSlice(cities)
+		wg.Add(1) // Increment the WaitGroup counter for each goroutine
 
-		lastName := randomItem(permutedLastNames)
-		firstName := randomItem(permutedFirstNames)
-		city := randomItem(permutedCities)
-		balance := rand.Int63n(10000)
+		go func(i int) {
+			defer wg.Done() // Decrement the WaitGroup counter when the goroutine completes
 
-		_, err := db.Exec("INSERT INTO balances (LastName, FirstName, City, Balance) VALUES ($1, $2, $3, $4)", lastName, firstName, city, balance)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Printf("Inserted record %d\n", i)
+			permutedLastNames := permuteSlice(lastNames)
+			permutedFirstNames := permuteSlice(firstNames)
+			permutedCities := permuteSlice(cities)
+
+			lastName := randomItem(permutedLastNames)
+			firstName := randomItem(permutedFirstNames)
+			city := randomItem(permutedCities)
+			balance := rand.Int63n(10000)
+
+			_, err := db.Exec("INSERT INTO balances (LastName, FirstName, City, Balance) VALUES ($1, $2, $3, $4)", lastName, firstName, city, balance)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("Inserted record %d\n", i)
+		}(i)
 	}
 
-	fmt.Printf("Completed!")
+	// Wait for all goroutines to finish
+	wg.Wait()
+
+	fmt.Printf("Completed!\n")
 }
 
 func loadCSV(filename string) ([]string, error) {
