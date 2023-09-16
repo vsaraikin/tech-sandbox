@@ -10,6 +10,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"sync"
 )
 
 const (
@@ -68,6 +69,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	var wg sync.WaitGroup
+
 	var dataToInsert []data.InsertBalancesParams
 
 	permutedLastNames := permuteSlice(lastNames)
@@ -75,21 +78,26 @@ func main() {
 	permutedCities := permuteSlice(cities)
 
 	for i := 1; i <= numberRows; i++ {
+		wg.Add(1)
 
-		dataToInsert = append(dataToInsert, data.InsertBalancesParams{
-			Firstname: randomItem(permutedFirstNames),
-			Lastname:  randomItem(permutedLastNames),
-			City:      randomItem(permutedCities),
-			Balance:   rand.Int63n(10000),
-		},
-		)
+		go func(i int) {
+			defer wg.Done()
+			dataToInsert = append(dataToInsert, data.InsertBalancesParams{
+				Firstname: randomItem(permutedFirstNames),
+				Lastname:  randomItem(permutedLastNames),
+				City:      randomItem(permutedCities),
+				Balance:   rand.Int63n(10000),
+			},
+			)
 
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Printf("Inserted record %d\n", i)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("Appended record %d\n", i)
+		}(i)
 	}
 
+	wg.Wait()
 	_ = q.InsertBalances(context.Background(), dataToInsert)
 
 	fmt.Printf("Completed!\n")
