@@ -90,10 +90,7 @@ func main() {
 		fmt.Printf("Inserted record %d\n", i)
 	}
 
-	_, err = q.InsertBalances(context.Background(), dataToInsert)
-	if err != nil {
-		log.Fatal(err)
-	}
+	_ = q.InsertBalances(context.Background(), dataToInsert)
 
 	fmt.Printf("Completed!\n")
 }

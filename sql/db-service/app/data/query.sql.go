@@ -6,10 +6,3 @@
 package data
 
 import ()
-
-type InsertBalancesParams struct {
-	Lastname  string
-	Firstname string
-	City      string
-	Balance   int64
-}
