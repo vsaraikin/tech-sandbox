@@ -2,13 +2,14 @@ package main
 
 import (
 	"bufio"
-	"database/sql"
+	"context"
 	"fmt"
+	"github.com/jackc/pgx/v4"
 	_ "github.com/lib/pq"
+	"inserter/data"
 	"log"
 	"math/rand"
 	"os"
-	"sync"
 )
 
 const (
@@ -19,35 +20,39 @@ const (
 	dbname   = "db"
 )
 
-func main() {
-	numberRows := 8000
+var numberRows = 8000
 
-	// Establish a connection to the PostgreSQL database
+func main() {
+
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
-	db, err := sql.Open("postgres", connStr)
+	conn, err := pgx.Connect(context.Background(), connStr)
+
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func(conn *pgx.Conn, ctx context.Context) {
+		err := conn.Close(ctx)
+		if err != nil {
 
-	// Create the "balances" table if it doesn't exist
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS balances (
-			PersonID SERIAL PRIMARY KEY,
-			LastName varchar(255),
-			FirstName varchar(255),
-			City varchar(255),
-			Balance bigint
-		);
+		}
+	}(conn, context.Background())
+
+	q := data.New(conn)
+
+	_, err = conn.Exec(context.Background(), `
+	CREATE TABLE IF NOT EXISTS balances (
+		PersonID SERIAL PRIMARY KEY,
+		LastName varchar(255),
+		FirstName varchar(255),
+		City varchar(255),
+		Balance bigint);
 	`)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Seed the random number generator
 	rand.Seed(824)
 
-	// Load CSV data for realistic names and cities
 	lastNames, err := loadCSV("last_names.csv")
 	if err != nil {
 		log.Fatal(err)
@@ -63,56 +68,59 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var wg sync.WaitGroup
+	var dataToInsert []data.InsertBalancesParams
 
-	// Use goroutines to insert random data into the "balances" table with permuted names and cities
+	permutedLastNames := permuteSlice(lastNames)
+	permutedFirstNames := permuteSlice(firstNames)
+	permutedCities := permuteSlice(cities)
+
 	for i := 1; i <= numberRows; i++ {
-		wg.Add(1) // Increment the WaitGroup counter for each goroutine
 
-		go func(i int) {
-			defer wg.Done() // Decrement the WaitGroup counter when the goroutine completes
+		dataToInsert = append(dataToInsert, data.InsertBalancesParams{
+			Firstname: randomItem(permutedFirstNames),
+			Lastname:  randomItem(permutedLastNames),
+			City:      randomItem(permutedCities),
+			Balance:   rand.Int63n(10000),
+		},
+		)
 
-			permutedLastNames := permuteSlice(lastNames)
-			permutedFirstNames := permuteSlice(firstNames)
-			permutedCities := permuteSlice(cities)
-
-			lastName := randomItem(permutedLastNames)
-			firstName := randomItem(permutedFirstNames)
-			city := randomItem(permutedCities)
-			balance := rand.Int63n(10000)
-
-			_, err := db.Exec("INSERT INTO balances (LastName, FirstName, City, Balance) VALUES ($1, $2, $3, $4)", lastName, firstName, city, balance)
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Printf("Inserted record %d\n", i)
-		}(i)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Inserted record %d\n", i)
 	}
 
-	// Wait for all goroutines to finish
-	wg.Wait()
+	_, err = q.InsertBalances(context.Background(), dataToInsert)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Printf("Completed!\n")
 }
 
 func loadCSV(filename string) ([]string, error) {
-	var data []string
+	var outputData []string
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+
+		}
+	}(file)
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		data = append(data, scanner.Text())
+		outputData = append(outputData, scanner.Text())
 	}
 
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return outputData, nil
 }
 
 func permuteSlice(slice []string) []string {
