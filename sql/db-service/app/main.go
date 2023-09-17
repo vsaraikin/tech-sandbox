@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"os"
 	"sync"
+	"time"
 )
 
 const (
@@ -21,7 +22,7 @@ const (
 	dbname   = "db"
 )
 
-var numberRows = 8000
+var numberRows = 150000
 
 func main() {
 
@@ -70,18 +71,22 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-
+	var m sync.Mutex
 	var dataToInsert []data.InsertBalancesParams
 
 	permutedLastNames := permuteSlice(lastNames)
 	permutedFirstNames := permuteSlice(firstNames)
 	permutedCities := permuteSlice(cities)
 
+	start := time.Now()
 	for i := 1; i <= numberRows; i++ {
 		wg.Add(1)
 
 		go func(i int) {
 			defer wg.Done()
+
+			m.Lock()
+			defer m.Unlock()
 			dataToInsert = append(dataToInsert, data.InsertBalancesParams{
 				Firstname: randomItem(permutedFirstNames),
 				Lastname:  randomItem(permutedLastNames),
@@ -93,14 +98,17 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Printf("Appended record %d\n", i)
 		}(i)
 	}
 
 	wg.Wait()
-	_ = q.InsertBalances(context.Background(), dataToInsert)
-
-	fmt.Printf("Completed!\n")
+	result := q.InsertBalances(context.Background(), dataToInsert)
+	result.Exec(func(i int, err error) {
+		if err != nil {
+			log.Printf("error updating book %d: %s\n", i, err)
+		}
+	})
+	log.Printf("Completed in %s\n", time.Since(start))
 }
 
 func loadCSV(filename string) ([]string, error) {
