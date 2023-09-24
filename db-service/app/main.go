@@ -22,7 +22,7 @@ const (
 	dbname   = "db"
 )
 
-var numberRows = 150000
+var numberRows = 1_000_000
 
 func main() {
 

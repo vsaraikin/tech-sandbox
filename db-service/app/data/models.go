@@ -4,8 +4,6 @@
 
 package data
 
-import ()
-
 type Balance struct {
 	Personid  int32
 	Lastname  string
