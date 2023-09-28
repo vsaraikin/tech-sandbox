@@ -11,7 +11,7 @@ import (
 
 func main() {
 	reader := kafka.NewKafkaReader()
-	writer := kafka.NewKafkaWriter()
+	// writer := kafka.NewKafkaWriter()
 
 	ctx := context.Background()
 	messages := make(chan kafkago.Message, 1000)
@@ -23,9 +23,10 @@ func main() {
 		return reader.FetchMessage(ctx, messages)
 	})
 
-	g.Go(func() error {
-		return writer.WriteMessages(ctx, messages, messageCommitChan)
-	})
+	// With this line messages will be fetched -> written again -> committed in a cycle
+	// g.Go(func() error {
+	// 	return writer.WriteMessages(ctx, messages, messageCommitChan)
+	// })
 
 	g.Go(func() error {
 		return reader.CommitMessages(ctx, messageCommitChan)
